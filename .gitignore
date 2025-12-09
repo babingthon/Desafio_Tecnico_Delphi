@@ -1,0 +1,55 @@
+# Delphi build
+*.dcu
+*.dcp
+*.drc
+*.dres
+*.dproj.local
+*.identcache
+*.local
+*.stat
+
+# Packages
+*.bpl
+*.bpi
+*.dpl
+*.dpk.local
+*.dcp
+
+# Output folders
+Win32/
+Win64/
+OSX32/
+OSX64/
+Android/
+Android64/
+iOSDevice/
+iOSSimulator/
+
+# Backup files
+*.~*
+*.bak
+*.orig
+
+# Unit states
+*.ddp
+*.tvsconfig
+
+# Autosave
+__history/
+__recovery/
+
+# Generated configs
+*.cfg
+*.hpp
+
+# Delphi IDE cache
+*.dsk
+
+# Token/cache files
+access_token.txt
+
+# Logs
+*.log
+
+# CSV gerados
+resultado.csv
