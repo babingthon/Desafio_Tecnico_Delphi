@@ -24,7 +24,8 @@ uses
   Vcl.DBGrids,
   Datasnap.DBClient,
   System.Types,
-  UProcessController;
+  UIBGEApi,
+  UModelTypes, Vcl.ExtCtrls;
 
 type
   TFrmPrincipal = class(TForm)
@@ -48,10 +49,14 @@ type
     CDSInputData: TClientDataSet;
     DSInputData: TDataSource;
     BtnConsultarIBGE: TButton;
+    Panel1: TPanel;
+    RgFiltroStatus: TRadioGroup;
     procedure BtnLoginClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure BtnBrowseClick(Sender: TObject);
     procedure BtnCarregarCSVClick(Sender: TObject);
+    procedure BtnConsultarIBGEClick(Sender: TObject);
+    procedure RgFiltroStatusClick(Sender: TObject);
   private
     FAuthToken: string;
     FAuthService: TAuthenticationService;
@@ -122,6 +127,81 @@ begin
   end;
 
   BtnCarregarCSV.Enabled := True;
+end;
+
+procedure TFrmPrincipal.BtnConsultarIBGEClick(Sender: TObject);
+var
+  LIBGEService: TIBGEService;
+  LDataIBGE: TMunicipioIBGE;
+  LInputName: string;
+  LTotalFound: Integer;
+begin
+  MemLog.Clear;
+  BtnConsultarIBGE.Enabled := False;
+  LTotalFound := 0;
+
+  LIBGEService := nil;
+  try
+    try
+      MemLog.Lines.Add('Conectando à API do IBGE...');
+
+      LIBGEService := TIBGEService.Create(NetHttpClientAuth);
+      MemLog.Lines.Add('✅ Lista completa de municípios carregada.');
+
+      CDSInputData.DisableControls;
+
+      if CDSInputData.Active and (CDSInputData.RecordCount > 0) then
+      begin
+        CDSInputData.First;
+
+        while not CDSInputData.EOF do
+        begin
+          LInputName := CDSInputData.FieldByName('MUNICIPIO_INPUT').AsString.Trim;
+
+          LDataIBGE := LIBGEService.FindMunicipio(LInputName);
+
+          CDSInputData.Edit;
+
+          if LDataIBGE.MunicipioIBGE <> '' then
+          begin
+            CDSInputData.FieldByName('MUNICIPIO_IBGE').AsString := LDataIBGE.MunicipioIBGE;
+            CDSInputData.FieldByName('UF').AsString := LDataIBGE.UF;
+            CDSInputData.FieldByName('REGIAO').AsString := LDataIBGE.Regiao;
+            CDSInputData.FieldByName('ID_IBGE').AsLargeInt := LDataIBGE.IdIBGE;
+            CDSInputData.FieldByName('STATUS').AsString := StatusToString(stOK);
+
+            Inc(LTotalFound);
+          end
+          else
+          begin
+            CDSInputData.FieldByName('STATUS').AsString := StatusToString(stNAO_ENCONTRADO);
+          end;
+
+          CDSInputData.Post;
+          CDSInputData.Next;
+        end;
+
+        CDSInputData.First;
+      end;
+
+      MemLog.Lines.Add('');
+      MemLog.Lines.Add('===== RESULTADO DA CONSULTA =====');
+      MemLog.Lines.Add(Format('✔ Municípios encontrados: %d', [LTotalFound]));
+      MemLog.Lines.Add(Format('✖ Não encontrados: %d', [CDSInputData.RecordCount - LTotalFound]));
+      MemLog.Lines.Add('');
+      MemLog.Lines.Add('Pronto para a etapa final: Processamento e Envio.');
+    //BtnProcessar.Enabled := True;
+    except
+      on E: Exception do
+      begin
+        MemLog.Lines.Add('❌ ERRO na Consulta IBGE: ' + E.Message);
+      end;
+    end;
+  finally
+    CDSInputData.EnableControls;
+    FreeAndNil(LIBGEService);
+    BtnConsultarIBGE.Enabled := True;
+  end;
 end;
 
 procedure TFrmPrincipal.BtnLoginClick(Sender: TObject);
@@ -316,6 +396,48 @@ begin
   MemLog.Lines.Add('');
   MemLog.Lines.Add('');
   BtnLogin.Enabled := False;
+end;
+
+procedure TFrmPrincipal.RgFiltroStatusClick(Sender: TObject);
+var
+  LFilterValue: string;
+begin
+  if not CDSInputData.Active then
+    Exit;
+
+  // Desativa os controles para garantir que o filtro seja aplicado rapidamente
+  CDSInputData.DisableControls;
+  try
+    case RgFiltroStatus.ItemIndex of
+      // 0: "Todos"
+      0:
+      begin
+        CDSInputData.Filtered := False; // Desativa qualquer filtro ativo
+      end;
+
+      // 1: "OK"
+      1:
+      begin
+        LFilterValue := StatusToString(stOK);
+        // Aplica o filtro na coluna STATUS
+        CDSInputData.Filter := 'STATUS = ' + QuotedStr(LFilterValue);
+        CDSInputData.Filtered := True;
+      end;
+
+      // 2: "Não Encontrados"
+      2:
+      begin
+        LFilterValue := StatusToString(stNAO_ENCONTRADO);
+        // Aplica o filtro na coluna STATUS
+        CDSInputData.Filter := 'STATUS = ' + QuotedStr(LFilterValue);
+        CDSInputData.Filtered := True;
+      end;
+
+      // Adicionar filtros para ERRO_API e AMBIGUO, se necessário (itens 3 e 4)
+    end;
+  finally
+    CDSInputData.EnableControls; // Reativa a visualização no DBGrid
+  end;
 end;
 
 end.

@@ -33,7 +33,25 @@ type
     TotalMunicipios: Integer;
   end;
 
+function StatusToString(const AStatus: TStatus): string;
+
 implementation
+
+function StatusToString(const AStatus: TStatus): string;
+begin
+  case AStatus of
+    stOK:
+      Result := 'OK';
+    stNAO_ENCONTRADO:
+      Result := 'NAO_ENCONTRADO';
+    stERRO_API:
+      Result := 'ERRO_API';
+    stAMBIGUO:
+      Result := 'AMBIGUO';
+  else
+    Result := 'DESCONHECIDO';
+  end;
+end;
 
 end.
 

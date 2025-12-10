@@ -22,19 +22,15 @@ type
     FHttpClient: TNetHTTPClient;
     FAuthToken: string;
     FProcessedList: TList<TMunicipioProcessado>;
-
     function ProcessLine(const Line: string): TMunicipioProcessado;
     procedure CalculateStatistics(AStats: TJSONObject);
     procedure GenerateCSVFile;
     procedure SendStats(const AStats: TJSONObject);
-
     function CheckAndLoadInputFile(const AInputFilePath: string): TStringDynArray;
-
   public
     constructor Create(AHttpClient: TNetHTTPClient; const AAuthToken: string);
     destructor Destroy; override;
     procedure Execute(const AInputFilePath: string);
-    function StatusToString(const AStatus: TStatus): string;
   end;
 
 implementation
@@ -60,22 +56,6 @@ const
     );
 
 { TProcessController }
-
-function TProcessController.StatusToString(const AStatus: TStatus): string;
-begin
-  case AStatus of
-    stOK:
-      Result := 'OK';
-    stNAO_ENCONTRADO:
-      Result := 'NAO_ENCONTRADO';
-    stERRO_API:
-      Result := 'ERRO_API';
-    stAMBIGUO:
-      Result := 'AMBIGUO';
-  else
-    Result := 'DESCONHECIDO';
-  end;
-end;
 
 constructor TProcessController.Create(AHttpClient: TNetHTTPClient; const AAuthToken: string);
 begin

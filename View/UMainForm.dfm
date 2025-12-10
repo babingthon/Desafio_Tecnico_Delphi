@@ -2,7 +2,7 @@ object FrmPrincipal: TFrmPrincipal
   Left = 0
   Top = 0
   Caption = 'Principal'
-  ClientHeight = 569
+  ClientHeight = 653
   ClientWidth = 839
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -18,7 +18,7 @@ object FrmPrincipal: TFrmPrincipal
     Left = 0
     Top = 0
     Width = 839
-    Height = 352
+    Height = 418
     ActivePage = TabIBGE
     Align = alClient
     TabOrder = 0
@@ -28,7 +28,7 @@ object FrmPrincipal: TFrmPrincipal
       Caption = 'Autenticacao'
       object Label1: TLabel
         Left = 240
-        Top = 81
+        Top = 113
         Width = 37
         Height = 17
         Caption = 'Nome'
@@ -41,7 +41,7 @@ object FrmPrincipal: TFrmPrincipal
       end
       object Label2: TLabel
         Left = 240
-        Top = 137
+        Top = 169
         Width = 34
         Height = 17
         Caption = 'Email'
@@ -54,7 +54,7 @@ object FrmPrincipal: TFrmPrincipal
       end
       object Label3: TLabel
         Left = 240
-        Top = 193
+        Top = 225
         Width = 37
         Height = 17
         Caption = 'Senha'
@@ -67,37 +67,55 @@ object FrmPrincipal: TFrmPrincipal
       end
       object EdtEmail: TEdit
         Left = 240
-        Top = 160
+        Top = 192
         Width = 321
         Height = 25
-        TabOrder = 1
+        TabOrder = 2
         Text = 'babingthon.bandeira@gmail.com'
       end
       object EdtPassword: TEdit
         Left = 240
-        Top = 216
+        Top = 248
         Width = 321
         Height = 25
         PasswordChar = '#'
-        TabOrder = 2
+        TabOrder = 3
         Text = '123456'
       end
       object BtnLogin: TButton
         Left = 486
-        Top = 256
+        Top = 288
         Width = 75
         Height = 25
         Caption = 'Login'
-        TabOrder = 3
+        TabOrder = 4
         OnClick = BtnLoginClick
       end
       object EdtNome: TEdit
         Left = 240
-        Top = 104
+        Top = 136
         Width = 321
         Height = 25
-        TabOrder = 0
+        TabOrder = 1
         Text = 'Babingthon Bandeira'
+      end
+      object Panel1: TPanel
+        Left = 0
+        Top = 0
+        Width = 831
+        Height = 41
+        Align = alTop
+        Caption = 'OBTER O TOKEN'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -19
+        Font.Name = 'Segoe UI'
+        Font.Style = [fsBold]
+        ParentFont = False
+        TabOrder = 0
+        ExplicitLeft = 216
+        ExplicitTop = 40
+        ExplicitWidth = 185
       end
     end
     object TabIBGE: TTabSheet
@@ -105,14 +123,14 @@ object FrmPrincipal: TFrmPrincipal
       ImageIndex = 1
       object EdtInputFile: TEdit
         Left = 16
-        Top = 8
+        Top = 21
         Width = 633
         Height = 25
         TabOrder = 0
       end
       object BtnBrowse: TButton
         Left = 672
-        Top = 8
+        Top = 21
         Width = 137
         Height = 25
         Caption = 'Buscar Arquivo'
@@ -121,16 +139,16 @@ object FrmPrincipal: TFrmPrincipal
       end
       object BtnCarregarCSV: TButton
         Left = 672
-        Top = 287
+        Top = 352
         Width = 137
         Height = 25
         Caption = 'Carregar Arquivo'
-        TabOrder = 4
+        TabOrder = 5
         OnClick = BtnCarregarCSVClick
       end
       object DBGrdMunicipios: TDBGrid
         Left = 16
-        Top = 40
+        Top = 53
         Width = 793
         Height = 233
         DataSource = DSInputData
@@ -143,26 +161,40 @@ object FrmPrincipal: TFrmPrincipal
       end
       object BtnConsultarIBGE: TButton
         Left = 352
-        Top = 287
+        Top = 352
         Width = 113
         Height = 25
         Caption = 'Consultar IBGE'
         Enabled = False
+        TabOrder = 4
+        OnClick = BtnConsultarIBGEClick
+      end
+      object RgFiltroStatus: TRadioGroup
+        Left = 352
+        Top = 292
+        Width = 457
+        Height = 53
+        Caption = 'Status'
+        Columns = 3
+        ItemIndex = 0
+        Items.Strings = (
+          'Todos'
+          'OK'
+          'N'#227'o Encontrados')
         TabOrder = 3
+        OnClick = RgFiltroStatusClick
       end
     end
   end
   object MemLog: TMemo
     Left = 0
-    Top = 352
+    Top = 418
     Width = 839
-    Height = 217
+    Height = 235
     Align = alBottom
     ReadOnly = True
     ScrollBars = ssVertical
     TabOrder = 1
-    ExplicitTop = 351
-    ExplicitWidth = 835
   end
   object NetHttpClientAuth: TNetHTTPClient
     UserAgent = 'Embarcadero URI Client/1.0'
