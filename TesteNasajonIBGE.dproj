@@ -106,19 +106,14 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="..\View\UMainForm.pas">
+        <DCCReference Include="View\UMainForm.pas">
             <Form>FrmPrincipal</Form>
             <FormType>dfm</FormType>
         </DCCReference>
-        <DCCReference Include="UAuthentication.pas"/>
-        <DCCReference Include="..\Model\UModelTypes.pas"/>
-        <DCCReference Include="UIBGEApi.pas"/>
-        <DCCReference Include="UProcessController.pas"/>
-        <DCCReference Include="..\UDataModule.pas">
-            <Form>DM</Form>
-            <FormType>dfm</FormType>
-            <DesignClass>TDataModule</DesignClass>
-        </DCCReference>
+        <DCCReference Include="Controller\UAuthentication.pas"/>
+        <DCCReference Include="Controller\UIBGEApi.pas"/>
+        <DCCReference Include="Controller\UProcessController.pas"/>
+        <DCCReference Include="Model\UModelTypes.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -145,7 +140,7 @@
                 </Excluded_Packages>
             </Delphi.Personality>
             <Deployment Version="4">
-                <DeployFile LocalName="..\Project\TesteNasajonIBGE.exe" Configuration="Debug" Class="ProjectOutput">
+                <DeployFile LocalName="Project\TesteNasajonIBGE.exe" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win32">
                         <RemoteName>TesteNasajonIBGE.exe</RemoteName>
                         <Overwrite>true</Overwrite>

@@ -12,26 +12,23 @@ uses
   System.IOUtils,
   System.Types,
   UModelTypes,
-  UIBGEApi,
   System.Net.HttpClientComponent,
   Datasnap.DBClient;
 
 type
   TProcessController = class
   private
-    FIBGEService: TIBGEService;
     FHttpClient: TNetHTTPClient;
     FAuthToken: string;
-    FProcessedList: TList<TMunicipioProcessado>;
-    function ProcessLine(const Line: string): TMunicipioProcessado;
-    procedure SaveStatsJSONToFile(const AStats: TJSONObject);
+    function PrettyJSON(const AJson: string): string;
+    procedure SaveStatsJSONToFile(const APayload: TJSONObject);
   public
     constructor Create(AHttpClient: TNetHTTPClient; const AAuthToken: string);
     destructor Destroy; override;
-    procedure Execute(const AInputFilePath: string);
+
     procedure CalculateStatistics(const ASourceData: TClientDataSet; out AStats: TJSONObject);
     procedure GenerateCSVFile(const ASourceData: TClientDataSet);
-    procedure SendStats(const AStats: TJSONObject);
+    function SendStats(const AStats: TJSONObject): string;
   end;
 
 implementation
@@ -48,94 +45,17 @@ const
 constructor TProcessController.Create(AHttpClient: TNetHTTPClient; const AAuthToken: string);
 begin
   inherited Create;
+
+  if AHttpClient = nil then
+    raise Exception.Create('HttpClient não pode ser nil.');
+
   FHttpClient := AHttpClient;
   FAuthToken := AAuthToken;
-  FProcessedList := TList<TMunicipioProcessado>.Create;
-
-  try
-    FIBGEService := TIBGEService.Create(FHttpClient);
-  except
-    on E: Exception do
-      raise Exception.Create('Falha ao inicializar o serviço IBGE: ' + E.Message);
-  end;
 end;
 
 destructor TProcessController.Destroy;
 begin
-  FreeAndNil(FIBGEService);
-  FreeAndNil(FProcessedList);
   inherited Destroy;
-end;
-
-function TProcessController.ProcessLine(const Line: string): TMunicipioProcessado;
-var
-  LParts: TStringDynArray;
-  LPop: Int64;
-  LNome: string;
-  LDataIBGE: TMunicipioIBGE;
-begin
-  FillChar(Result, SizeOf(TMunicipioProcessado), 0);
-  Result.Status := stERRO_API;
-
-  LParts := Line.Split([',']);
-
-  for var I := 0 to High(LParts) do
-    LParts[I] := Trim(LParts[I]);
-
-  if Length(LParts) < 2 then
-    Exit;
-
-  LNome := Trim(LParts[0]);
-
-  if not TryStrToInt64(Trim(LParts[1]), LPop) then
-  begin
-    Result.MunicipioInput := LNome;
-    Result.PopulacaoInput := 0;
-    Result.Status := stNAO_ENCONTRADO;
-    Exit;
-  end;
-
-  Result.MunicipioInput := LNome;
-  Result.PopulacaoInput := LPop;
-
-  LDataIBGE := FIBGEService.FindMunicipio(LNome);
-
-  if LDataIBGE.MunicipioIBGE <> '' then
-  begin
-    Result.MunicipioIBGE := LDataIBGE.MunicipioIBGE;
-    Result.UF := LDataIBGE.UF;
-    Result.Regiao := LDataIBGE.Regiao;
-    Result.IdIBGE := LDataIBGE.IdIBGE;
-    Result.Status := stOK;
-  end
-  else
-    Result.Status := stNAO_ENCONTRADO;
-end;
-
-procedure TProcessController.Execute(const AInputFilePath: string);
-var
-  LFileLines: TStringDynArray;
-  LProcessedItem: TMunicipioProcessado;
-  LStatsJSON: TJSONObject;
-  I: Integer;
-begin
-  FProcessedList.Clear;
-
-  //LFileLines := CheckAndLoadInputFile(AInputFilePath);
-
-  for I := 1 to High(LFileLines) do
-  begin
-    LProcessedItem := ProcessLine(LFileLines[I]);
-    FProcessedList.Add(LProcessedItem);
-  end;
-
-  LStatsJSON := TJSONObject.Create;
-  try
-    //CalculateStatistics(LStatsJSON);
-    SendStats(LStatsJSON);
-  finally
-    LStatsJSON.Free;
-  end;
 end;
 
 procedure TProcessController.GenerateCSVFile(const ASourceData: TClientDataSet);
@@ -182,6 +102,21 @@ begin
   finally
     ASourceData.EnableControls;
     LStringList.Free;
+  end;
+end;
+
+function TProcessController.PrettyJSON(const AJson: string): string;
+var
+  JsonValue: TJSONValue;
+begin
+  Result := AJson;
+
+  JsonValue := TJSONObject.ParseJSONValue(AJson);
+  try
+    if Assigned(JsonValue) then
+      Result := JsonValue.Format(2);
+  finally
+    JsonValue.Free;
   end;
 end;
 
@@ -265,37 +200,38 @@ begin
     AStats.AddPair('total_erro_api', TJSONNumber.Create(LTotalErroAPI));
     AStats.AddPair('pop_total_ok', TJSONNumber.Create(LPopTotalOK));
     AStats.AddPair('medias_por_regiao', LMediasJSON);
-
-    SaveStatsJSONToFile(AStats);
   finally
     ASourceData.EnableControls;
     LStats.Free;
   end;
 end;
 
-procedure TProcessController.SaveStatsJSONToFile(const AStats: TJSONObject);
+procedure TProcessController.SaveStatsJSONToFile(const APayload: TJSONObject);
 var
   LFilePath: string;
   LJSONFormatted: string;
 begin
-  if AStats = nil then
+  if APayload = nil then
     raise Exception.Create('Objeto JSON de estatísticas está vazio.');
 
   LFilePath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'stats_output.json');
 
-  LJSONFormatted := AStats.Format(2);
+  LJSONFormatted := APayload.Format(2);
   TFile.WriteAllText(LFilePath, LJSONFormatted, TEncoding.UTF8);
 end;
 
-procedure TProcessController.SendStats(const AStats: TJSONObject);
+function TProcessController.SendStats(const AStats: TJSONObject): string;
 var
   LResponse: IHTTPResponse;
   LJSONPayload: TJSONObject;
   LJSONResponse: TJSONObject;
   LStream: TStringStream;
-  Score: Double;
-  Feedback: string;
 begin
+  Result := '';
+
+  if AStats = nil then
+    raise Exception.Create('Stats JSON não pode ser nil ao enviar para o corretor.');
+
   FHttpClient.CustomHeaders['Authorization'] := 'Bearer ' + FAuthToken;
 
   LJSONPayload := TJSONObject.Create;
@@ -313,30 +249,24 @@ begin
         [TNameValuePair.Create('Content-Type', 'application/json')]
       );
 
-      if LResponse.StatusCode = 200 then
+      if LResponse.StatusCode <> 200 then
       begin
-        LJSONResponse := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
-        try
-          Writeln('✅ Envio de resultados OK.');
-
-          if LJSONResponse.TryGetValue<Double>('score', Score) then
-            Writeln(Format('Score Recebido: %.2f', [Score]))
-          else
-            Writeln('Score não encontrado na resposta.');
-
-          if LJSONResponse.TryGetValue<string>('feedback', Feedback) then
-            Writeln('Feedback: ' + Feedback);
-        finally
-          LJSONResponse.Free;
-        end;
-      end
-      else
-      begin
-        raise Exception.Create(Format('Erro HTTP %d ao enviar resultados. Detalhe: %s', [LResponse.StatusCode, LResponse.ContentAsString]));
+        raise Exception.CreateFmt(
+          'Erro HTTP %d ao enviar resultados. Detalhe: %s',
+          [LResponse.StatusCode, LResponse.ContentAsString]
+        );
       end;
+
+      Result := PrettyJSON(LResponse.ContentAsString);
+
+      LJSONResponse := TJSONObject.ParseJSONValue(Result) as TJSONObject;
+      if Assigned(LJSONResponse) then
+        LJSONResponse.Free;
+
     finally
       LStream.Free;
     end;
+
   finally
     LJSONPayload.Free;
   end;

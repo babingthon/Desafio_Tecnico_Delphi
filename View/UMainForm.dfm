@@ -23,7 +23,7 @@ object FrmPrincipal: TFrmPrincipal
     Align = alClient
     TabOrder = 0
     ExplicitWidth = 835
-    ExplicitHeight = 351
+    ExplicitHeight = 417
     object TabAutenticacao: TTabSheet
       Caption = 'Autenticacao'
       object Label1: TLabel
@@ -113,9 +113,6 @@ object FrmPrincipal: TFrmPrincipal
         Font.Style = [fsBold]
         ParentFont = False
         TabOrder = 0
-        ExplicitLeft = 216
-        ExplicitTop = 40
-        ExplicitWidth = 185
       end
     end
     object TabIBGE: TTabSheet
@@ -205,6 +202,8 @@ object FrmPrincipal: TFrmPrincipal
     ReadOnly = True
     ScrollBars = ssVertical
     TabOrder = 1
+    ExplicitTop = 417
+    ExplicitWidth = 835
   end
   object NetHttpClientAuth: TNetHTTPClient
     UserAgent = 'Embarcadero URI Client/1.0'

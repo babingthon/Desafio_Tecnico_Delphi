@@ -8,8 +8,8 @@ uses
   System.JSON,
   System.Net.HttpClient,
   System.Net.URLClient,
-  System.IOUtils,
-  System.Net.HttpClientComponent;
+  System.Net.HttpClientComponent,
+  System.IOUtils;
 
 type
   TAuthenticationService = class
@@ -19,6 +19,7 @@ type
   public
     constructor Create(AHttpClient: TNetHTTPClient);
     destructor Destroy; override;
+
     function Login(const AEmail, ASenha: string): string;
   end;
 
@@ -35,18 +36,24 @@ const
 constructor TAuthenticationService.Create(AHttpClient: TNetHTTPClient);
 begin
   inherited Create;
+  if AHttpClient = nil then
+    raise Exception.Create('HttpClient não pode ser nil.');
+
   FHttpClient := AHttpClient;
 end;
 
 destructor TAuthenticationService.Destroy;
 begin
-  inherited Destroy;
+  inherited;
 end;
 
 procedure TAuthenticationService.SaveTokenToFile(const AToken: string);
 var
   LFilePath: string;
 begin
+  if AToken.Trim = '' then
+    raise Exception.Create('Token vazio. Salvamento abortado.');
+
   LFilePath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'access_token.txt');
   TFile.WriteAllText(LFilePath, AToken, TEncoding.UTF8);
 end;
@@ -62,28 +69,28 @@ begin
   Result := '';
 
   FHttpClient.CustomHeaders['apikey'] := SUPABASE_ANON_KEY;
+  FHttpClient.CustomHeaders['Content-Type'] := 'application/json';
+  FHttpClient.CustomHeaders['Accept'] := 'application/json';
 
   LJSONPayload := TJSONObject.Create;
   try
     LJSONPayload.AddPair('email', AEmail);
     LJSONPayload.AddPair('password', ASenha);
 
-    LStream := TStringStream.Create(LJSONPayload.ToString, TEncoding.UTF8);
+    LStream := TStringStream.Create(LJSONPayload.ToJSON, TEncoding.UTF8);
     try
       LResponse := FHttpClient.Post(
         SUPABASE_URL + LOGIN_ENDPOINT,
-        LStream,
-        nil,
-        [TNameValuePair.Create('Content-Type', 'application/json')]
+        LStream
       );
 
       if LResponse.StatusCode <> 200 then
-        raise Exception.Create('Erro HTTP ' + LResponse.StatusCode.ToString + ' Detalhe: ' + LResponse.ContentAsString);
+        raise Exception.Create(Format('Falha na autenticação. Código HTTP: %d. Resposta: %s', [LResponse.StatusCode,
+          LResponse.ContentAsString]));
 
       LJSONResponse := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
-
       if not Assigned(LJSONResponse) then
-        raise Exception.Create('Resposta JSON inválida do servidor.');
+        raise Exception.Create('Resposta JSON inválida.');
 
       try
         if not LJSONResponse.TryGetValue<string>('access_token', LToken) then

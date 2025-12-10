@@ -245,6 +245,7 @@ procedure TFrmPrincipal.BtnProcessarClick(Sender: TObject);
 var
   LController: TProcessController;
   LStatsJSON: TJSONObject;
+  LJsonRetorno: string;
 begin
   MemLog.Clear;
   BtnProcessar.Enabled := False;
@@ -280,9 +281,11 @@ begin
       MemLog.Lines.Add('✅ Estatísticas calculadas.');
 
       MemLog.Lines.Add('3. Enviando resultados para a API de correção...');
-      LController.SendStats(LStatsJSON);
+      LJsonRetorno := LController.SendStats(LStatsJSON);
 
       MemLog.Lines.Add('Processo concluído com sucesso.');
+      MemLog.Lines.Add('==== RESPOSTA DO CORRETOR ====');
+      MemLog.Lines.Add(LJsonRetorno);
     except
       on E: Exception do
       begin
@@ -298,46 +301,32 @@ end;
 
 procedure TFrmPrincipal.CreateDataSetStructure;
 begin
-  if CDSInputData.Active then
-    CDSInputData.Fields.Clear;
-
   CDSInputData.Close;
   CDSInputData.FieldDefs.Clear;
 
   CDSInputData.FieldDefs.Add('MUNICIPIO_INPUT', ftString, 100);
   CDSInputData.FieldDefs.Add('POPULACAO_INPUT', ftLargeint);
-
   CDSInputData.FieldDefs.Add('MUNICIPIO_IBGE', ftString, 100);
   CDSInputData.FieldDefs.Add('UF', ftString, 2);
   CDSInputData.FieldDefs.Add('REGIAO', ftString, 30);
   CDSInputData.FieldDefs.Add('ID_IBGE', ftLargeint);
-
   CDSInputData.FieldDefs.Add('STATUS', ftString, 20);
 
-  CDSInputData.FieldDefs.Items[0].CreateField(CDSInputData); // MUNICIPIO_INPUT
-  CDSInputData.FieldDefs.Items[1].CreateField(CDSInputData); // POPULACAO_INPUT
-  CDSInputData.FieldDefs.Items[2].CreateField(CDSInputData); // MUNICIPIO_IBGE
-  CDSInputData.FieldDefs.Items[3].CreateField(CDSInputData); // UF
-  CDSInputData.FieldDefs.Items[4].CreateField(CDSInputData); // REGIAO
-  CDSInputData.FieldDefs.Items[5].CreateField(CDSInputData); // ID_IBGE
-  CDSInputData.FieldDefs.Items[6].CreateField(CDSInputData); // STATUS
-
   CDSInputData.CreateDataSet;
-  CDSInputData.FieldDefs.Update;
 
   (CDSInputData.FieldByName('MUNICIPIO_INPUT') as TStringField).DisplayLabel := 'Município (CSV)';
-  (CDSInputData.FieldByName('MUNICIPIO_INPUT') as TStringField).DisplayWidth := 25;
+  CDSInputData.FieldByName('MUNICIPIO_INPUT').DisplayWidth := 25;
 
   CDSInputData.FieldByName('POPULACAO_INPUT').DisplayLabel := 'População';
   CDSInputData.FieldByName('POPULACAO_INPUT').DisplayWidth := 10;
 
   (CDSInputData.FieldByName('MUNICIPIO_IBGE') as TStringField).DisplayLabel := 'Município IBGE';
-  (CDSInputData.FieldByName('MUNICIPIO_IBGE') as TStringField).DisplayWidth := 25;
+  CDSInputData.FieldByName('MUNICIPIO_IBGE').DisplayWidth := 25;
 
-  (CDSInputData.FieldByName('UF') as TStringField).DisplayLabel := 'UF';
+  CDSInputData.FieldByName('UF').DisplayLabel := 'UF';
   CDSInputData.FieldByName('UF').DisplayWidth := 5;
 
-  (CDSInputData.FieldByName('REGIAO') as TStringField).DisplayLabel := 'Região';
+  CDSInputData.FieldByName('REGIAO').DisplayLabel := 'Região';
   CDSInputData.FieldByName('REGIAO').DisplayWidth := 10;
 
   CDSInputData.FieldByName('ID_IBGE').DisplayLabel := 'Cód. IBGE';
