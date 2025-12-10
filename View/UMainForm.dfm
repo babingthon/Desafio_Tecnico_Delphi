@@ -143,7 +143,7 @@ object FrmPrincipal: TFrmPrincipal
         Width = 137
         Height = 25
         Caption = 'Carregar Arquivo'
-        TabOrder = 5
+        TabOrder = 6
         OnClick = BtnCarregarCSVClick
       end
       object DBGrdMunicipios: TDBGrid
@@ -166,7 +166,7 @@ object FrmPrincipal: TFrmPrincipal
         Height = 25
         Caption = 'Consultar IBGE'
         Enabled = False
-        TabOrder = 4
+        TabOrder = 5
         OnClick = BtnConsultarIBGEClick
       end
       object RgFiltroStatus: TRadioGroup
@@ -183,6 +183,16 @@ object FrmPrincipal: TFrmPrincipal
           'N'#227'o Encontrados')
         TabOrder = 3
         OnClick = RgFiltroStatusClick
+      end
+      object BtnProcessar: TButton
+        Left = 24
+        Top = 352
+        Width = 145
+        Height = 25
+        Caption = 'Processar Resultados'
+        Enabled = False
+        TabOrder = 4
+        OnClick = BtnProcessarClick
       end
     end
   end

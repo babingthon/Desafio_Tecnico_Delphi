@@ -13,7 +13,8 @@ uses
   System.Types,
   UModelTypes,
   UIBGEApi,
-  System.Net.HttpClientComponent;
+  System.Net.HttpClientComponent,
+  Datasnap.DBClient;
 
 type
   TProcessController = class
@@ -23,14 +24,14 @@ type
     FAuthToken: string;
     FProcessedList: TList<TMunicipioProcessado>;
     function ProcessLine(const Line: string): TMunicipioProcessado;
-    procedure CalculateStatistics(AStats: TJSONObject);
-    procedure GenerateCSVFile;
-    procedure SendStats(const AStats: TJSONObject);
-    function CheckAndLoadInputFile(const AInputFilePath: string): TStringDynArray;
+    procedure SaveStatsJSONToFile(const AStats: TJSONObject);
   public
     constructor Create(AHttpClient: TNetHTTPClient; const AAuthToken: string);
     destructor Destroy; override;
     procedure Execute(const AInputFilePath: string);
+    procedure CalculateStatistics(const ASourceData: TClientDataSet; out AStats: TJSONObject);
+    procedure GenerateCSVFile(const ASourceData: TClientDataSet);
+    procedure SendStats(const AStats: TJSONObject);
   end;
 
 implementation
@@ -41,19 +42,6 @@ uses
 
 const
   CORRECTOR_API_URL = 'https://mynxlubykylncinttggu.functions.supabase.co/ibge-submit';
-  INPUT_CSV_CONTENT: array[0..10] of string = (
-    'municipio,populacao',
-    'Niteroi,515317',
-    'Sao Gonçalo,1091737',
-    'Sao Paulo,12396372',
-    'Belo Horzionte,2530701',
-    'Florianopolis,516524',
-    'Santo Andre,723889',
-    'Santoo Andre,700000',
-    'Rio de Janeiro,6718903',
-    'Curitba,1963726',
-    'Brasilia,3094325'
-    );
 
 { TProcessController }
 
@@ -77,33 +65,6 @@ begin
   FreeAndNil(FIBGEService);
   FreeAndNil(FProcessedList);
   inherited Destroy;
-end;
-
-function TProcessController.CheckAndLoadInputFile(const AInputFilePath: string): TStringDynArray;
-var
-  LStringList: TStringList;
-  I: Integer;
-begin
-  if not TFile.Exists(AInputFilePath) then
-  begin
-    LStringList := TStringList.Create;
-    try
-      for I := Low(INPUT_CSV_CONTENT) to High(INPUT_CSV_CONTENT) do
-        LStringList.Add(INPUT_CSV_CONTENT[I]);
-
-      LStringList.SaveToFile(AInputFilePath, TEncoding.UTF8);
-      Writeln(Format('Aviso: Arquivo input.csv não encontrado. Um novo arquivo foi criado em: %s', [AInputFilePath]));
-    finally
-      LStringList.Free;
-    end;
-  end;
-
-  try
-    Result := TFile.ReadAllLines(AInputFilePath, TEncoding.UTF8);
-  except
-    on E: Exception do
-      raise Exception.Create('Erro ao ler o arquivo input.csv: ' + E.Message);
-  end;
 end;
 
 function TProcessController.ProcessLine(const Line: string): TMunicipioProcessado;
@@ -160,7 +121,7 @@ var
 begin
   FProcessedList.Clear;
 
-  LFileLines := CheckAndLoadInputFile(AInputFilePath);
+  //LFileLines := CheckAndLoadInputFile(AInputFilePath);
 
   for I := 1 to High(LFileLines) do
   begin
@@ -168,50 +129,64 @@ begin
     FProcessedList.Add(LProcessedItem);
   end;
 
-  GenerateCSVFile;
-
   LStatsJSON := TJSONObject.Create;
   try
-    CalculateStatistics(LStatsJSON);
+    //CalculateStatistics(LStatsJSON);
     SendStats(LStatsJSON);
   finally
     LStatsJSON.Free;
   end;
 end;
 
-procedure TProcessController.GenerateCSVFile;
+procedure TProcessController.GenerateCSVFile(const ASourceData: TClientDataSet);
 var
   LStringList: TStringList;
-  LItem: TMunicipioProcessado;
   LFileName: string;
+
+  function SafeCSV(const S: string): string;
+  begin
+    if (S.Contains(',')) or (S.Contains('"')) then
+      Result := '"' + StringReplace(S, '"', '""', [rfReplaceAll]) + '"'
+    else
+      Result := S;
+  end;
+
 begin
   LFileName := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'resultado.csv');
   LStringList := TStringList.Create;
+
+  ASourceData.DisableControls;
   try
     LStringList.Add('municipio_input,populacao_input,municipio_ibge,uf,regiao,id_ibge,status');
 
-    for LItem in FProcessedList do
+    if ASourceData.Active and (ASourceData.RecordCount > 0) then
     begin
-      LStringList.Add(
-        LItem.MunicipioInput + ',' +
-        IntToStr(LItem.PopulacaoInput) + ',' +
-        LItem.MunicipioIBGE + ',' +
-        LItem.UF + ',' +
-        LItem.Regiao + ',' +
-        IntToStr(LItem.IdIBGE) + ',' +
-        StatusToString(LItem.Status)
-      );
+      ASourceData.First;
+      while not ASourceData.EOF do
+      begin
+        LStringList.Add(
+          SafeCSV(ASourceData.FieldByName('MUNICIPIO_INPUT').AsString) + ',' +
+          ASourceData.FieldByName('POPULACAO_INPUT').AsLargeInt.ToString + ',' +
+          SafeCSV(ASourceData.FieldByName('MUNICIPIO_IBGE').AsString) + ',' +
+          ASourceData.FieldByName('UF').AsString + ',' +
+          ASourceData.FieldByName('REGIAO').AsString + ',' +
+          ASourceData.FieldByName('ID_IBGE').AsLargeInt.ToString + ',' +
+          ASourceData.FieldByName('STATUS').AsString
+        );
+
+        ASourceData.Next;
+      end;
     end;
 
     LStringList.SaveToFile(LFileName, TEncoding.UTF8);
   finally
+    ASourceData.EnableControls;
     LStringList.Free;
   end;
 end;
 
-procedure TProcessController.CalculateStatistics(AStats: TJSONObject);
+procedure TProcessController.CalculateStatistics(const ASourceData: TClientDataSet; out AStats: TJSONObject);
 var
-  LItem: TMunicipioProcessado;
   LStats: TDictionary<string, TRegiaoStats>;
   LTotalOK: Integer;
   LTotalNaoEncontrado: Integer;
@@ -220,39 +195,58 @@ var
   LRegiaoStats: TRegiaoStats;
   LMediasJSON: TJSONObject;
   LPair: TPair<string, TRegiaoStats>;
+  LStatusStr: string;
+  LPop: Int64;
+  LRegiao: string;
   Media: Double;
 begin
-  if AStats = nil then
-    raise Exception.Create('Parâmetro AStats não pode ser nil.');
+  AStats := nil;
+
+  if (not ASourceData.Active) or (ASourceData.RecordCount = 0) then
+    raise Exception.Create('Dataset vazio ou não carregado.');
 
   LTotalOK := 0;
   LTotalNaoEncontrado := 0;
   LTotalErroAPI := 0;
   LPopTotalOK := 0;
+
   LStats := TDictionary<string, TRegiaoStats>.Create;
   LMediasJSON := TJSONObject.Create;
 
+  ASourceData.DisableControls;
   try
-    for LItem in FProcessedList do
+    ASourceData.First;
+
+    while not ASourceData.EOF do
     begin
-      case LItem.Status of
-        stOK:
-          begin
-            Inc(LTotalOK);
-            Inc(LPopTotalOK, LItem.PopulacaoInput);
+      LStatusStr := ASourceData.FieldByName('STATUS').AsString;
 
-            if not LStats.TryGetValue(LItem.Regiao, LRegiaoStats) then
-              FillChar(LRegiaoStats, SizeOf(TRegiaoStats), 0);
+      if LStatusStr = StatusToString(stOK) then
+      begin
+        Inc(LTotalOK);
 
-            Inc(LRegiaoStats.TotalPopulacao, LItem.PopulacaoInput);
-            Inc(LRegiaoStats.TotalMunicipios);
-            LStats.AddOrSetValue(LItem.Regiao, LRegiaoStats);
-          end;
-        stNAO_ENCONTRADO:
-          Inc(LTotalNaoEncontrado);
-        stERRO_API:
-          Inc(LTotalErroAPI);
+        LPop := ASourceData.FieldByName('POPULACAO_INPUT').AsLargeInt;
+        Inc(LPopTotalOK, LPop);
+
+        LRegiao := ASourceData.FieldByName('REGIAO').AsString;
+
+        if not LStats.TryGetValue(LRegiao, LRegiaoStats) then
+          FillChar(LRegiaoStats, SizeOf(TRegiaoStats), 0);
+
+        Inc(LRegiaoStats.TotalPopulacao, LPop);
+        Inc(LRegiaoStats.TotalMunicipios);
+        LStats.AddOrSetValue(LRegiao, LRegiaoStats);
+      end
+      else if LStatusStr = StatusToString(stNAO_ENCONTRADO) then
+      begin
+        Inc(LTotalNaoEncontrado);
+      end
+      else if LStatusStr = StatusToString(stERRO_API) then
+      begin
+        Inc(LTotalErroAPI);
       end;
+
+      ASourceData.Next;
     end;
 
     for LPair in LStats do
@@ -264,15 +258,33 @@ begin
       end;
     end;
 
-    AStats.AddPair('total_municipios', TJSONNumber.Create(FProcessedList.Count));
+    AStats := TJSONObject.Create;
+    AStats.AddPair('total_municipios', TJSONNumber.Create(ASourceData.RecordCount));
     AStats.AddPair('total_ok', TJSONNumber.Create(LTotalOK));
     AStats.AddPair('total_nao_encontrado', TJSONNumber.Create(LTotalNaoEncontrado));
     AStats.AddPair('total_erro_api', TJSONNumber.Create(LTotalErroAPI));
     AStats.AddPair('pop_total_ok', TJSONNumber.Create(LPopTotalOK));
     AStats.AddPair('medias_por_regiao', LMediasJSON);
+
+    SaveStatsJSONToFile(AStats);
   finally
+    ASourceData.EnableControls;
     LStats.Free;
   end;
+end;
+
+procedure TProcessController.SaveStatsJSONToFile(const AStats: TJSONObject);
+var
+  LFilePath: string;
+  LJSONFormatted: string;
+begin
+  if AStats = nil then
+    raise Exception.Create('Objeto JSON de estatísticas está vazio.');
+
+  LFilePath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'stats_output.json');
+
+  LJSONFormatted := AStats.Format(2);
+  TFile.WriteAllText(LFilePath, LJSONFormatted, TEncoding.UTF8);
 end;
 
 procedure TProcessController.SendStats(const AStats: TJSONObject);
@@ -289,6 +301,8 @@ begin
   LJSONPayload := TJSONObject.Create;
   try
     LJSONPayload.AddPair('stats', AStats.Clone as TJSONObject);
+
+    SaveStatsJSONToFile(LJSONPayload);
 
     LStream := TStringStream.Create(LJSONPayload.ToString, TEncoding.UTF8);
     try

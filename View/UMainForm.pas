@@ -25,7 +25,10 @@ uses
   Datasnap.DBClient,
   System.Types,
   UIBGEApi,
-  UModelTypes, Vcl.ExtCtrls;
+  UModelTypes,
+  Vcl.ExtCtrls,
+  UProcessController,
+  System.JSON;
 
 type
   TFrmPrincipal = class(TForm)
@@ -51,12 +54,14 @@ type
     BtnConsultarIBGE: TButton;
     Panel1: TPanel;
     RgFiltroStatus: TRadioGroup;
+    BtnProcessar: TButton;
     procedure BtnLoginClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure BtnBrowseClick(Sender: TObject);
     procedure BtnCarregarCSVClick(Sender: TObject);
     procedure BtnConsultarIBGEClick(Sender: TObject);
     procedure RgFiltroStatusClick(Sender: TObject);
+    procedure BtnProcessarClick(Sender: TObject);
   private
     FAuthToken: string;
     FAuthService: TAuthenticationService;
@@ -190,7 +195,7 @@ begin
       MemLog.Lines.Add(Format('✖ Não encontrados: %d', [CDSInputData.RecordCount - LTotalFound]));
       MemLog.Lines.Add('');
       MemLog.Lines.Add('Pronto para a etapa final: Processamento e Envio.');
-    //BtnProcessar.Enabled := True;
+      BtnProcessar.Enabled := True;
     except
       on E: Exception do
       begin
@@ -234,6 +239,61 @@ begin
   end;
 
   BtnLogin.Enabled := True;
+end;
+
+procedure TFrmPrincipal.BtnProcessarClick(Sender: TObject);
+var
+  LController: TProcessController;
+  LStatsJSON: TJSONObject;
+begin
+  MemLog.Clear;
+  BtnProcessar.Enabled := False;
+
+  if FAuthToken = '' then
+  begin
+    MemLog.Lines.Add('❌ Erro: Por favor, faça a autenticação.');
+    BtnProcessar.Enabled := True;
+    Exit;
+  end;
+
+  if (not CDSInputData.Active) or (CDSInputData.RecordCount = 0) then
+  begin
+    MemLog.Lines.Add('❌ Erro: Não há dados carregados para processar.');
+    BtnProcessar.Enabled := True;
+    Exit;
+  end;
+
+  LController := nil;
+  LStatsJSON := nil;
+
+  try
+    LController := TProcessController.Create(NetHttpClientAuth, FAuthToken);
+    try
+
+      MemLog.Lines.Add('1. Gerando resultado.csv...');
+      LController.GenerateCSVFile(CDSInputData);
+      MemLog.Lines.Add('✅ Arquivo resultado.csv gerado com sucesso.');
+
+      MemLog.Lines.Add('2. Calculando estatísticas e montando JSON...');
+      LStatsJSON := TJSONObject.Create;
+      LController.CalculateStatistics(CDSInputData, LStatsJSON);
+      MemLog.Lines.Add('✅ Estatísticas calculadas.');
+
+      MemLog.Lines.Add('3. Enviando resultados para a API de correção...');
+      LController.SendStats(LStatsJSON);
+
+      MemLog.Lines.Add('Processo concluído com sucesso.');
+    except
+      on E: Exception do
+      begin
+        MemLog.Lines.Add('❌ ERRO CRÍTICO: ' + E.Message);
+      end;
+    end;
+  finally
+    FreeAndNil(LController);
+    FreeAndNil(LStatsJSON);
+    BtnProcessar.Enabled := True;
+  end;
 end;
 
 procedure TFrmPrincipal.CreateDataSetStructure;
@@ -392,6 +452,7 @@ begin
   if LToken = '' then
     Exit;
 
+  FAuthToken := LToken;
   MemLog.Lines.Add(LToken);
   MemLog.Lines.Add('');
   MemLog.Lines.Add('');
@@ -411,27 +472,27 @@ begin
     case RgFiltroStatus.ItemIndex of
       // 0: "Todos"
       0:
-      begin
-        CDSInputData.Filtered := False; // Desativa qualquer filtro ativo
-      end;
+        begin
+          CDSInputData.Filtered := False; // Desativa qualquer filtro ativo
+        end;
 
       // 1: "OK"
-      1:
-      begin
-        LFilterValue := StatusToString(stOK);
+        1:
+        begin
+          LFilterValue := StatusToString(stOK);
         // Aplica o filtro na coluna STATUS
-        CDSInputData.Filter := 'STATUS = ' + QuotedStr(LFilterValue);
-        CDSInputData.Filtered := True;
-      end;
+          CDSInputData.Filter := 'STATUS = ' + QuotedStr(LFilterValue);
+          CDSInputData.Filtered := True;
+        end;
 
       // 2: "Não Encontrados"
-      2:
-      begin
-        LFilterValue := StatusToString(stNAO_ENCONTRADO);
+        2:
+        begin
+          LFilterValue := StatusToString(stNAO_ENCONTRADO);
         // Aplica o filtro na coluna STATUS
-        CDSInputData.Filter := 'STATUS = ' + QuotedStr(LFilterValue);
-        CDSInputData.Filtered := True;
-      end;
+          CDSInputData.Filter := 'STATUS = ' + QuotedStr(LFilterValue);
+          CDSInputData.Filtered := True;
+        end;
 
       // Adicionar filtros para ERRO_API e AMBIGUO, se necessário (itens 3 e 4)
     end;
