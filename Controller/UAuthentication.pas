@@ -61,7 +61,6 @@ var
 begin
   Result := '';
 
-  // Necessário para autenticação
   FHttpClient.CustomHeaders['apikey'] := SUPABASE_ANON_KEY;
 
   LJSONPayload := TJSONObject.Create;
@@ -71,7 +70,6 @@ begin
 
     LStream := TStringStream.Create(LJSONPayload.ToString, TEncoding.UTF8);
     try
-      // Importante: enviar o Content-Type no Post
       LResponse := FHttpClient.Post(
         SUPABASE_URL + LOGIN_ENDPOINT,
         LStream,

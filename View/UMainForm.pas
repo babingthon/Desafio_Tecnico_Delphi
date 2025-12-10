@@ -18,7 +18,13 @@ uses
   System.Net.URLClient,
   System.Net.HttpClient,
   System.Net.HttpClientComponent,
-  System.IOUtils;
+  System.IOUtils,
+  Data.DB,
+  Vcl.Grids,
+  Vcl.DBGrids,
+  Datasnap.DBClient,
+  System.Types,
+  UProcessController;
 
 type
   TFrmPrincipal = class(TForm)
@@ -28,14 +34,30 @@ type
     EdtEmail: TEdit;
     EdtPassword: TEdit;
     BtnLogin: TButton;
-    MemLog: TMemo;
     NetHttpClientAuth: TNetHTTPClient;
     EdtNome: TEdit;
+    EdtInputFile: TEdit;
+    BtnBrowse: TButton;
+    OpenDialog: TOpenDialog;
+    BtnCarregarCSV: TButton;
+    DBGrdMunicipios: TDBGrid;
+    MemLog: TMemo;
+    Label1: TLabel;
+    Label2: TLabel;
+    Label3: TLabel;
+    CDSInputData: TClientDataSet;
+    DSInputData: TDataSource;
+    BtnConsultarIBGE: TButton;
     procedure BtnLoginClick(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
+    procedure BtnBrowseClick(Sender: TObject);
+    procedure BtnCarregarCSVClick(Sender: TObject);
   private
     FAuthToken: string;
     FAuthService: TAuthenticationService;
     procedure LoadTokenIfExists;
+    procedure CreateDataSetStructure;
+    procedure LoadCSVToDataSet;
   protected
     procedure Loaded; override;
     procedure FormDestroy(Sender: TObject);
@@ -49,9 +71,58 @@ var
 
 implementation
 
+const
+  INPUT_CSV_CONTENT: array[0..10] of string = (
+    'municipio,populacao',
+    'Niteroi,515317',
+    'Sao Gonçalo,1091737',
+    'Sao Paulo,12396372',
+    'Belo Horzionte,2530701',
+    'Florianopolis,516524',
+    'Santo Andre,723889',
+    'Santoo Andre,700000',
+    'Rio de Janeiro,6718903',
+    'Curitba,1963726',
+    'Brasilia,3094325'
+    );
+
 {$R *.dfm}
 
 { TFrmPrincipal }
+
+procedure TFrmPrincipal.BtnBrowseClick(Sender: TObject);
+begin
+  OpenDialog.Filter := 'CSV Files (*.csv)|*.csv';
+  OpenDialog.FileName := 'input.csv';
+
+  if OpenDialog.Execute then
+  begin
+    EdtInputFile.Text := OpenDialog.FileName;
+  end;
+end;
+
+procedure TFrmPrincipal.BtnCarregarCSVClick(Sender: TObject);
+begin
+  MemLog.Clear;
+  BtnCarregarCSV.Enabled := False;
+
+  try
+    LoadCSVToDataSet;
+
+    MemLog.Lines.Add(Format('✅ %d linhas carregadas no DataSet.', [CDSInputData.RecordCount]));
+    MemLog.Lines.Add('✔ Pronto para consulta à API do IBGE.');
+
+    BtnConsultarIBGE.Enabled := True;
+  except
+    on E: Exception do
+    begin
+      MemLog.Lines.Add('❌ ERRO ao carregar CSV:');
+      MemLog.Lines.Add(E.Message);
+    end;
+  end;
+
+  BtnCarregarCSV.Enabled := True;
+end;
 
 procedure TFrmPrincipal.BtnLoginClick(Sender: TObject);
 begin
@@ -85,9 +156,138 @@ begin
   BtnLogin.Enabled := True;
 end;
 
+procedure TFrmPrincipal.CreateDataSetStructure;
+begin
+  if CDSInputData.Active then
+    CDSInputData.Fields.Clear;
+
+  CDSInputData.Close;
+  CDSInputData.FieldDefs.Clear;
+
+  CDSInputData.FieldDefs.Add('MUNICIPIO_INPUT', ftString, 100);
+  CDSInputData.FieldDefs.Add('POPULACAO_INPUT', ftLargeint);
+
+  CDSInputData.FieldDefs.Add('MUNICIPIO_IBGE', ftString, 100);
+  CDSInputData.FieldDefs.Add('UF', ftString, 2);
+  CDSInputData.FieldDefs.Add('REGIAO', ftString, 30);
+  CDSInputData.FieldDefs.Add('ID_IBGE', ftLargeint);
+
+  CDSInputData.FieldDefs.Add('STATUS', ftString, 20);
+
+  CDSInputData.FieldDefs.Items[0].CreateField(CDSInputData); // MUNICIPIO_INPUT
+  CDSInputData.FieldDefs.Items[1].CreateField(CDSInputData); // POPULACAO_INPUT
+  CDSInputData.FieldDefs.Items[2].CreateField(CDSInputData); // MUNICIPIO_IBGE
+  CDSInputData.FieldDefs.Items[3].CreateField(CDSInputData); // UF
+  CDSInputData.FieldDefs.Items[4].CreateField(CDSInputData); // REGIAO
+  CDSInputData.FieldDefs.Items[5].CreateField(CDSInputData); // ID_IBGE
+  CDSInputData.FieldDefs.Items[6].CreateField(CDSInputData); // STATUS
+
+  CDSInputData.CreateDataSet;
+  CDSInputData.FieldDefs.Update;
+
+  (CDSInputData.FieldByName('MUNICIPIO_INPUT') as TStringField).DisplayLabel := 'Município (CSV)';
+  (CDSInputData.FieldByName('MUNICIPIO_INPUT') as TStringField).DisplayWidth := 25;
+
+  CDSInputData.FieldByName('POPULACAO_INPUT').DisplayLabel := 'População';
+  CDSInputData.FieldByName('POPULACAO_INPUT').DisplayWidth := 10;
+
+  (CDSInputData.FieldByName('MUNICIPIO_IBGE') as TStringField).DisplayLabel := 'Município IBGE';
+  (CDSInputData.FieldByName('MUNICIPIO_IBGE') as TStringField).DisplayWidth := 25;
+
+  (CDSInputData.FieldByName('UF') as TStringField).DisplayLabel := 'UF';
+  CDSInputData.FieldByName('UF').DisplayWidth := 5;
+
+  (CDSInputData.FieldByName('REGIAO') as TStringField).DisplayLabel := 'Região';
+  CDSInputData.FieldByName('REGIAO').DisplayWidth := 10;
+
+  CDSInputData.FieldByName('ID_IBGE').DisplayLabel := 'Cód. IBGE';
+  CDSInputData.FieldByName('ID_IBGE').DisplayWidth := 12;
+
+  CDSInputData.FieldByName('STATUS').DisplayLabel := 'Status';
+  CDSInputData.FieldByName('STATUS').DisplayWidth := 12;
+
+  DBGrdMunicipios.Columns.RebuildColumns;
+end;
+
+procedure TFrmPrincipal.FormCreate(Sender: TObject);
+begin
+  EdtInputFile.Text := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'input.csv');
+end;
+
 procedure TFrmPrincipal.FormDestroy(Sender: TObject);
 begin
   FreeAndNil(FAuthService);
+end;
+
+procedure TFrmPrincipal.LoadCSVToDataSet;
+var
+  LInputPath: string;
+  LFileLines: TStringDynArray;
+  LStringList: TStringList;
+  LParts: TStringDynArray;
+  I: Integer;
+  LPop: Int64;
+begin
+  MemLog.Lines.Add('Carregando arquivo CSV...');
+
+  LInputPath := Trim(EdtInputFile.Text);
+  if LInputPath = '' then
+  begin
+    MemLog.Lines.Add('❌ Caminho do arquivo não informado.');
+    Exit;
+  end;
+
+  if not TPath.IsPathRooted(LInputPath) then
+    LInputPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), LInputPath);
+
+  if not TFile.Exists(LInputPath) then
+  begin
+    LStringList := TStringList.Create;
+    try
+      for I := Low(INPUT_CSV_CONTENT) to High(INPUT_CSV_CONTENT) do
+        LStringList.Add(INPUT_CSV_CONTENT[I]);
+
+      LStringList.SaveToFile(LInputPath, TEncoding.UTF8);
+      MemLog.Lines.Add('⚠ Arquivo input.csv não encontrado. Criado automaticamente.');
+    finally
+      LStringList.Free;
+    end;
+  end;
+
+  LFileLines := TFile.ReadAllLines(LInputPath, TEncoding.UTF8);
+
+  CreateDataSetStructure;
+
+  CDSInputData.DisableControls;
+  try
+    for I := 1 to High(LFileLines) do
+    begin
+      LParts := LFileLines[I].Split([',']);
+
+      if Length(LParts) < 2 then
+        Continue;
+
+      CDSInputData.Insert;
+
+      CDSInputData.FieldByName('MUNICIPIO_INPUT').AsString := Trim(LParts[0]);
+
+      if TryStrToInt64(Trim(LParts[1]), LPop) then
+        CDSInputData.FieldByName('POPULACAO_INPUT').AsLargeInt := LPop
+      else
+        CDSInputData.FieldByName('POPULACAO_INPUT').AsLargeInt := 0;
+
+      CDSInputData.FieldByName('STATUS').AsString := 'NAO_ENCONTRADO';
+
+      CDSInputData.Post;
+    end;
+  finally
+    CDSInputData.EnableControls;
+  end;
+
+  CDSInputData.First;
+
+  MemLog.Lines.Add('✅ CSV carregado com sucesso.');
+  MemLog.Lines.Add(Format('Total de linhas carregadas: %d', [CDSInputData.RecordCount]));
 end;
 
 procedure TFrmPrincipal.Loaded;
@@ -112,7 +312,9 @@ begin
   if LToken = '' then
     Exit;
 
-  MemLog.Lines.Text := LToken;
+  MemLog.Lines.Add(LToken);
+  MemLog.Lines.Add('');
+  MemLog.Lines.Add('');
   BtnLogin.Enabled := False;
 end;
 
